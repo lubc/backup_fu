@@ -11,11 +11,11 @@ task :backup do
 end
 
 namespace :backup_fu do
-  
+
   desc "Copies over the example backup_fu.yml file to config/"
   task :setup do
     target = File.join($backup_fu_path, 'config', 'backup_fu.yml.example')
-    destination = File.join(RAILS_ROOT, 'config', 'backup_fu.yml')
+    destination = File.join(Rails.root.to_s, 'config', 'backup_fu.yml')
     if File.exist?(destination)
       puts "\nTarget file: #{destination}\n ... already exists.  Aborting.\n\n"
     else
@@ -23,7 +23,7 @@ namespace :backup_fu do
       puts "\nExample backup_fu.yml copied to config/.  Please edit this file before proceeding.\n\nSee 'rake -T backup_fu' for more commands.\n\n"
     end
   end
-  
+
   desc "Dumps the database locally.  Does *not* upload to S3."
   task :dump do
     b = BackupFu.new
@@ -42,7 +42,7 @@ namespace :backup_fu do
     b.backup
     b.backup_static
   end
-  
+
   namespace :static do
 
     desc "Tars and gzips static application files locally.  Does *not* upload to S3."
@@ -50,13 +50,13 @@ namespace :backup_fu do
       b = BackupFu.new
       b.dump_static
     end
-    
+
     desc "Backups up static files to Amazon S3. For configuration see the backup_fu README."
     task :backup do
       b = BackupFu.new
       b.backup_static
     end
   end
-  
-  
+
+
 end

@@ -6,17 +6,17 @@ class BackupFuConfigError < StandardError; end
 class S3ConnectError < StandardError; end
 
 class BackupFu
-  
+
   def initialize
-    db_conf = YAML.load_file(File.join(RAILS_ROOT, 'config', 'database.yml')) 
-    @db_conf = db_conf[RAILS_ENV].symbolize_keys
-    @fu_conf = YAML.load_file(File.join(RAILS_ROOT, 'config', 'backup_fu.yml')).symbolize_keys
+    db_conf = YAML.load_file(File.join(Rails.root.to_s, 'config', 'database.yml'))
+    @db_conf = db_conf[Rails.env].symbolize_keys
+    @fu_conf = YAML.load_file(File.join(Rails.root.to_s, 'config', 'backup_fu.yml')).symbolize_keys
     @fu_conf[:mysqldump_options] ||= '--complete-insert --skip-extended-insert'
     @verbose = !@fu_conf[:verbose].nil?
     check_conf
     create_dirs
   end
-  
+
   def dump
     host, port, password = '', '', ''
     if @db_conf.has_key?(:host) && @db_conf[:host] != 'localhost'
@@ -39,7 +39,7 @@ class BackupFu
     `#{cmd}`
 
     if !@fu_conf[:disable_tar_gzip]
-      
+
       tar_path = File.join(dump_base_path, db_filename_tarred)
 
       # TAR it up
@@ -52,22 +52,22 @@ class BackupFu
       puts "\nGzip: #{cmd}" if @verbose
       `#{cmd}`
     end
-    
+
   end
-  
+
   def backup
     dump
     establish_s3_connection
-    
+
     file = final_db_dump_path()
     puts "\nBacking up to S3: #{file}\n" if @verbose
-    
+
     AWS::S3::S3Object.store(File.basename(file), open(file), @fu_conf[:s3_bucket], :access => :private)
-    
+
   end
-  
+
   ## Static-file Dump/Backup methods
-  
+
   def dump_static
     if !@fu_conf[:static_paths]
       raise BackupFuConfigError, 'No static paths are defined in config/backup_fu.yml.  See README.'
@@ -77,21 +77,21 @@ class BackupFu
     @paths.each do |p|
       if p.first != '/'
         # Make into an Absolute path:
-        p = File.join(RAILS_ROOT, p)
+        p = File.join(Rails.root.to_s, p)
       end
-      
+
       puts "Static Path: #{p}" if @verbose
       if path_num == 0
         tar_switch = 'c'  # for create
       else
         tar_switch = 'r'  # for append
       end
-      
+
       # TAR
       cmd = niceify "tar -#{tar_switch}f #{static_tar_path} #{p}"
       puts "\nTar: #{cmd}\n" if @verbose
       `#{cmd}`
-      
+
       path_num += 1
     end
 
@@ -101,20 +101,20 @@ class BackupFu
     `#{cmd}`
 
   end
-  
+
   def backup_static
     dump_static
     establish_s3_connection
-    
+
     file = final_static_dump_path()
     puts "\nBacking up Static files to S3: #{file}\n" if @verbose
-    
+
     AWS::S3::S3Object.store(File.basename(file), open(file), @fu_conf[:s3_bucket], :access => :private)
-    
+
   end
-  
+
   private
-  
+
   def establish_s3_connection
     unless AWS::S3::Base.connected?
       AWS::S3::Base.establish_connection!(
@@ -124,7 +124,7 @@ class BackupFu
     end
     raise S3ConnectError, "\nERROR: Connection to Amazon S3 failed." unless AWS::S3::Base.connected?
   end
-  
+
   def check_conf
     if @fu_conf[:app_name] == 'replace_me'
       raise BackupFuConfigError, 'Application name (app_name) key not set in config/backup_fu.yml.'
@@ -140,26 +140,26 @@ class BackupFu
       end
     end
   end
-  
+
   def dump_path
     dump = {:postgresql => 'pg_dump',:mysql => 'mysqldump'}
     # Note: the 'mysqldump_path' config option is DEPRECATED but keeping this in for legacy config file support
     @fu_conf[:mysqldump_path] || @fu_conf[:dump_path] || dump[@db_conf[:adapter].intern]
   end
-  
+
   def dump_base_path
-    @fu_conf[:dump_base_path] || File.join(RAILS_ROOT, 'tmp', 'backup')
+    @fu_conf[:dump_base_path] || File.join(Rails.root.to_s, 'tmp', 'backup')
   end
-  
+
   def db_filename
     date_formatted = Time.now.strftime("%Y-%m-%d")
     "#{@fu_conf[:app_name]}_#{date_formatted}_db.sql"
   end
-  
+
   def db_filename_tarred
     db_filename.gsub('.sql', '.tar')
   end
-  
+
   def final_db_dump_path
     if @fu_conf[:disable_tar_gzip]
       filename = db_filename
@@ -168,27 +168,27 @@ class BackupFu
     end
     File.join(dump_base_path, filename)
   end
-  
+
   def static_tar_path
     date_formatted = Time.now.strftime("%Y-%m-%d")
     f = "#{@fu_conf[:app_name]}_#{date_formatted}_static.tar"
     File.join(dump_base_path, f)
   end
-  
+
   def final_static_dump_path
     date_formatted = Time.now.strftime("%Y-%m-%d")
     f = "#{@fu_conf[:app_name]}_#{date_formatted}_static.tar.gz"
     File.join(dump_base_path, f)
   end
-  
+
   def create_dirs
     ensure_directory_exists(dump_base_path)
   end
-  
+
   def ensure_directory_exists(dir)
     FileUtils.mkdir_p(dir) unless File.exist?(dir)
   end
-  
+
   def niceify(cmd)
     if @fu_conf[:enable_nice]
       "nice -n -#{@fu_conf[:nice_level]} #{cmd}"
@@ -196,6 +196,6 @@ class BackupFu
       cmd
     end
   end
-  
-  
+
+
 end
